@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Development Workflow
+
+See `KB-Development-Workflow.md` in the Knowledge Base for the full workflow. Summary:
+
+1. Bugs and features are tracked as **GitHub Issues**
+2. Claude works on a **feature branch** (worktrees for isolation in local sessions)
+3. Claude pushes the branch and opens a **Pull Request**
+4. Rick reviews and merges the PR
+5. Adding the `claude` label to an issue triggers Claude via GitHub Actions
+
 ## Commands
 
 ### Development Setup
