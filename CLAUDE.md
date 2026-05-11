@@ -96,6 +96,8 @@ This is a Model Context Protocol (MCP) server that bridges Claude Desktop with t
 - Unit tests mock all external dependencies (Things.py, shell commands)
 - Pytest configuration in pyproject.toml with async support
 - Supports both stdio (default) and HTTP transport modes
+- HTTP transport always uses Streamable HTTP (FastMCP 2.14+) at `/mcp` endpoint — SSE transport is not supported
+- For Docker/remote clients (e.g., OpenClaw), bind to `0.0.0.0` via `THINGS_MCP_HOST=0.0.0.0` and set client transport to `streamable-http`
 
 ## Things URL Scheme Authentication
 
