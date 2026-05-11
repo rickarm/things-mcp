@@ -17,3 +17,4 @@ wheels/
 *.dxt
 
 .DS_Store
+logs/
