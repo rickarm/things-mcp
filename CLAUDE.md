@@ -81,6 +81,7 @@ This is a Model Context Protocol (MCP) server that bridges Claude Desktop with t
    - **conftest.py** - Pytest fixtures and mock data
    - **_helpers.py** - `tool_text()` reads the text channel from a `ToolResult` (or a plain-string result) so text assertions work across both return shapes
    - **test_url_scheme.py** - Tests for URL construction
+     - Note: `test_construct_url_encodes_slash_in_values` doesn't mock `things.token` (unlike sibling update tests), so it reads the live Things DB and fails with `unable to open database file` in CI/sandboxes lacking DB access — not a real regression.
    - **test_formatters.py** - Tests for data formatting
    - **test_things_server.py** - Tests for server tools (incl. pagination + structured-content shape)
    - **test_things_server_headings.py** - Tests for heading functionality
@@ -90,6 +91,7 @@ This is a Model Context Protocol (MCP) server that bridges Claude Desktop with t
 ## Key Implementation Details
 
 - Uses things.py library for reading Things SQLite database
+- Things DB path: things.py auto-discovers `~/Library/Group Containers/JLMPQHK86H.com.culturedcode.ThingsMac/ThingsData-*/Things Database.thingsdatabase/main.sqlite` (newer Things 3 nests the DB under a per-install `ThingsData-*` dir); override with the `THINGSDB` env var. On macOS the server process needs TCC "data from other apps" access to that Group Container or DB reads fail (`unable to open database file`) — and can *hang* the single FastMCP event loop if the grant is mid-prompt.
 - Write operations use the Things URL scheme API, except Area create/update which use AppleScript (`osascript`)
 - FastMCP (3.x) provides the MCP protocol implementation
 - Read tools return a `ToolResult` (human-readable text + `structured_content`); write/report tools and error paths return plain strings
