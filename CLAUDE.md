@@ -92,6 +92,25 @@ This is a Model Context Protocol (MCP) server that bridges Claude Desktop with t
 
 - Uses things.py library for reading Things SQLite database
 - Things DB path: things.py auto-discovers `~/Library/Group Containers/JLMPQHK86H.com.culturedcode.ThingsMac/ThingsData-*/Things Database.thingsdatabase/main.sqlite` (newer Things 3 nests the DB under a per-install `ThingsData-*` dir); override with the `THINGSDB` env var. On macOS the server process needs TCC "data from other apps" access to that Group Container or DB reads fail (`unable to open database file`) — and can *hang* the single FastMCP event loop if the grant is mid-prompt.
+
+### ⚠️ Known failure mode: `brew upgrade uv` silently breaks Things DB reads (diagnosed 2026-06-22)
+
+**Symptom:** Every Things read returns `unable to open database file` (`sqlite3.OperationalError` at `things/database.py:500`). The server still binds `:8100` and answers MCP protocol requests, so `things-mcp-watchdog` sees it as "up" — but Mandy (OpenClaw) and Claude Code both get the error on any actual read. Earlier in the outage the watchdog may restart-loop (`curl exit 7` in `~/scripts/logs/things-mcp-watchdog.log`) because the first DB read hangs startup.
+
+**Root cause:** The launchd chain is `launchd → /bin/bash → ~/scripts/wrappers/uv.sh → exec uv → python`. The `exec` makes TCC attribute the Group-Container read to the **`uv` binary** (responsible process), not to FDA-holding `/bin/bash`. Homebrew binaries are ad-hoc signed, so each `brew upgrade` gives `uv` a new Cellar path/identity and **drops its "data from other apps" (`kTCCServiceSystemPolicyAppData`) grant**. A headless launchd job cannot surface/answer the prompt to restore it. (Triggered 2026-06-12 by uv `0.11.19 → 0.11.21`.)
+
+**What does NOT fix it (verified):**
+- Full Disk Access on `uv` (or on `/bin/bash`) — FDA does *not* cover the AppData / Group-Container class.
+- `tccutil reset SystemPolicyAppData` + service restart — the headless job still won't re-prompt (instant silent deny).
+- Granting the wrong binary — the open() is done by the venv `python3`, but TCC evaluates the *responsible* process (`uv`).
+
+**Fix:**
+1. **Stop the churn (done):** `uv` is now `brew pin`ned and on `~/scripts/brew-update-hold.txt`, so upgrades won't silently wipe the grant again. Re-grant FDA/AppData deliberately after any intentional uv upgrade.
+2. **Restore the grant:** reboot the mini (clears wedged TCC state — same playbook as the op-daemon hang), then click **Allow** on the *"uv" wants to access data from other apps* prompt on the first read. With uv pinned, that grant persists.
+
+**Robust fallback if the prompt never fires even on a clean boot:** switch reads from direct SQLite to **AppleScript/Automation** (the Automation TCC class persists and *can* be granted to a background app). Precedent: the sibling `things-export-system` repo already exports Things via `osascript` under launchd successfully.
+
+**Diagnosis tools:** `~/scripts/capture-tcc-prompts.sh` (captures tccd prompts — look for `kTCCServiceSystemPolicyAppData` with `Sub:{…/uv}`), things-mcp `logs/stderr.log` (the `OperationalError` traceback), `~/scripts/logs/things-mcp-watchdog.log`.
 - Write operations use the Things URL scheme API, except Area create/update which use AppleScript (`osascript`)
 - FastMCP (3.x) provides the MCP protocol implementation
 - Read tools return a `ToolResult` (human-readable text + `structured_content`); write/report tools and error paths return plain strings
